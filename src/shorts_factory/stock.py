@@ -101,6 +101,16 @@ def _fetch_dota_assets(
     downloaded_by_url: dict[str, Path] = {}
     max_bytes = int(float(visuals.get("max_video_mb", 28)) * 1024 * 1024)
     for index, scene in enumerate(plan.scenes, start=1):
+        if scene.visual_hint.casefold().startswith("map:"):
+            paths.append(None)
+            credits.append(
+                {
+                    "scene": index,
+                    "kind": "generated tactical map",
+                    "name": scene.visual_hint,
+                }
+            )
+            continue
         asset = resolve_visual_asset(scene.visual_hint, plan.topic, index)
         suffix = ".webm" if asset["kind"] == "hero" else ".png"
         target = asset_dir / f"scene-{index:02d}{suffix}"

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dota Map Studio · Ready Helper</title>
+    <link rel="stylesheet" href="/editor/studio.css" />
+  </head>
+  <body>
+    <header>
+      <div class="identity">
+        <span class="mark">R</span>
+        <div>
+          <strong>MAP STUDIO</strong><small>READY HELPER / DOTA 2</small>
+        </div>
+        <span class="local">ЛОКАЛЬНО</span>
+      </div>
+      <div class="project">
+        <input id="title" aria-label="Название шаблона" /><span id="saved"
+          >Не сохранено</span
+        >
+      </div>
+      <div class="actions">
+        <button id="import">Импорт</button
+        ><button id="export">Экспорт JSON</button
+        ><button id="save" class="primary">Сохранить шаблон</button>
+      </div>
+    </header>
+    <main>
+      <aside class="library">
+        <div class="section-heading">
+          <h2>Инструменты</h2>
+          <span>01</span>
+        </div>
+        <div id="tools" class="tools"></div>
+        <div class="section-heading">
+          <h2>Герои</h2>
+          <span>ПЕРЕТАЩИ НА КАРТУ</span>
+        </div>
+        <div id="heroes"></div>
+        <div class="field">
+          <label>Команда</label>
+          <div class="segmented">
+            <button class="active" data-team="ally">Союзники</button
+            ><button data-team="enemy">Противник</button>
+          </div>
+        </div>
+        <div class="section-heading"><h2>Твои шаблоны</h2></div>
+        <select id="templates" aria-label="Сохранённые шаблоны">
+          <option value="">Выбрать шаблон…</option></select
+        ><button id="example" class="wide">Загрузить пример: засада</button>
+        <p class="muted">
+          Карта 7.40 · реальная текстура местности.<br />Расстановка и зоны —
+          учебная иллюстрация.
+        </p>
+      </aside>
+      <section class="workspace">
+        <div class="workspace-top">
+          <div>
+            <span class="eyebrow">ХОЛСТ СЦЕНЫ</span>
+            <h1 id="scene-name">Рошан: засада</h1>
+          </div>
+          <div class="view-actions">
+            <button id="undo" title="Отменить (Ctrl+Z)">↶</button
+            ><button id="redo" title="Повторить (Ctrl+Shift+Z)">↷</button
+            ><button id="zoom-out" title="Отдалить">−</button
+            ><output id="zoom-label">2.5×</output
+            ><button id="zoom-in" title="Приблизить">+</button>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas
+            id="map"
+            width="1008"
+            height="980"
+            aria-label="Карта Dota: холст для рисования"
+          ></canvas>
+          <div class="canvas-tip" id="tip">
+            Выбери объект и перетащи. Колесо мыши — масштаб.
+          </div>
+          <div id="loading">Загружаю карту…</div>
+        </div>
+        <div class="transport">
+          <button id="play" class="play">▶</button
+          ><output id="time">0.0 / 4.5 сек</output
+          ><input
+            id="scrub"
+            aria-label="Позиция анимации"
+            type="range"
+            min="0"
+            max="1000"
+            value="0"
+          /><button id="all">Весь сюжет</button>
+        </div>
+        <div class="timeline-heading">
+          <span class="eyebrow">СЦЕНЫ СЮЖЕТА</span>
+          <div>
+            <button id="duplicate">Дублировать</button
+            ><button id="add-scene">+ Сцена</button
+            ><button id="delete-scene">Удалить сцену</button>
+          </div>
+        </div>
+        <div id="timeline"></div>
+      </section>
+      <aside class="inspector">
+        <div class="section-heading">
+          <h2>Сюжет и кадр</h2>
+          <span>9:16</span>
+        </div>
+        <div class="preview-wrap">
+          <canvas
+            id="preview"
+            width="1080"
+            height="1920"
+            aria-label="Предпросмотр вертикального ролика"
+          ></canvas>
+        </div>
+        <label>Хук на экране<input id="headline" maxlength="90" /></label
+        ><label>Ключевая мысль<input id="caption" maxlength="90" /></label
+        ><label
+          >Озвучка<textarea id="narration" rows="3" maxlength="500"></textarea>
+        </label>
+        <div class="field inline">
+          <label
+            >Длительность превью<input
+              id="duration"
+              type="number"
+              min="0.5"
+              max="30"
+              step="0.5" /></label
+          ><span>сек</span>
+        </div>
+        <div id="object-panel">
+          <div class="section-heading">
+            <h2>Выбранный объект</h2>
+            <button id="delete-object">Удалить</button>
+          </div>
+          <label>Подпись<input id="object-text" maxlength="60" /></label
+          ><label
+            >Цвет<select id="object-color">
+              <option value="ally">Мятный · союзники</option>
+              <option value="enemy">Красный · опасность</option>
+              <option value="gold">Золотой · обзор</option>
+            </select></label
+          ><label class="check"
+            ><input type="checkbox" id="object-hidden" /> Скрыть героя знаком
+            «?»</label
+          ><button id="route" class="wide">Нарисовать маршрут героя</button>
+          <p class="muted">
+            Проведи маршрут от героя. Он пройдёт его во время сцены.
+          </p>
+        </div>
+        <button id="render" class="primary wide render">
+          Собрать MP4 с озвучкой
+        </button>
+        <p id="render-status" class="muted">
+          Рендер на этом ПК. Тайминг подстроится под голос.
+        </p>
+        <a id="result" hidden target="_blank">Открыть готовое видео ↗</a>
+      </aside>
+    </main>
+    <input type="file" id="file" accept="application/json,.json" hidden />
+    <div id="toast" role="status"></div>
+    <script type="module" src="/editor/studio.js"></script>
+  </body>
+</html>

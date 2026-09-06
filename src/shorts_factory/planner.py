@@ -451,9 +451,11 @@ description, tags и scenes. description — 1–2 предложения с г�
 без хэштегов и общих фраз. tags — 6–10 точных ключей, обязательно dota2, дота2, shorts,
 а также герой, предмет, роль или механика из темы. Никаких тегов других игр.
 
-Каждая сцена: narration, screen_text до 60 символов и visual_hint. visual_hint должен
-быть только одним указателем официального Dota-ассета: hero:internal_name или
-item:internal_name. Для героя используй внутреннее английское имя без npc_dota_hero_,
+Каждая сцена: narration, screen_text до 60 символов и visual_hint. Для макро, вижена,
+Рошана, перемещений и расстановки используй понятную тактическую схему: map:roshan_danger,
+map:roshan_ward, map:roshan_choice, map:lanes или map:vision. В остальных случаях
+visual_hint должен быть указателем Dota-ассета: hero:internal_name или item:internal_name.
+Для героя используй внутреннее английское имя без npc_dota_hero_,
 например hero:pudge, hero:nevermore, hero:windrunner. Для предмета — имя без item_,
 например item:black_king_bar или item:blink. Выбирай героя или предмет, связанного со
 сценой; используй минимум 2 разных ассета за ролик, если тема это позволяет.
@@ -494,7 +496,8 @@ def _review_prompt(config: AppConfig, topic: str, raw_plan: dict[str, Any]) -> s
    конкретный выбор или «ТВОЙ ВЫБОР?», без просьб подписаться, поставить лайк или написать.
 6. title содержит #dota2 и #shorts; tags относятся только к Dota 2.
 7. visual_hint — только корректный hero:slug или item:slug. По возможности используй
-   хотя бы два разных релевантных ассета.
+   хотя бы два разных релевантных ассета. Для Рошана, вижена и макро предпочитай
+   map:roshan_danger, map:roshan_ward, map:roshan_choice, map:lanes или map:vision.
 8. Не оскорбляй зрителя и не пиши «включи мозг», «ты нуб», «хватит руинить» или похожие
    токсичные фразы. Тон уверенный и свой для дотеров, но не высокомерный.
 

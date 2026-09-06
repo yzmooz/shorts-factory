@@ -47,6 +47,7 @@ def test_dota_prompt_builds_hook_and_ad_break(monkeypatch, tmp_path):
     assert "сильный хук" in prompt
     assert "READY HELPER" in prompt
     assert "hero:internal_name" in prompt
+    assert "map:roshan_ward" in prompt
     assert "7.xx" in prompt
 
 

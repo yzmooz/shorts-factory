@@ -38,40 +38,56 @@ def create_frames(
     frame_dir.mkdir(parents=True, exist_ok=True)
     background_dir = frame_dir / "backgrounds"
     overlay_dir = frame_dir / "overlays"
+    source_dir = frame_dir / "sources"
     background_dir.mkdir(exist_ok=True)
     overlay_dir.mkdir(exist_ok=True)
+    source_dir.mkdir(exist_ok=True)
     result: list[Path] = []
     render_sources: list[str] = []
     overlay_paths: list[str] = []
     for index, scene in enumerate(plan.scenes):
         palette = PALETTES[index % len(PALETTES)]
         background = backgrounds[index] if backgrounds and index < len(backgrounds) else None
-        if background is None:
+        if visual_provider == "dota" and scene.visual_hint.casefold().startswith("map:"):
+            image = _dota_map_background(
+                width, height, scene.visual_hint.partition(":")[2], index
+            )
+            background = None
+        elif background is None:
             image = _gradient(width, height, palette[0], palette[1])
-        elif background.suffix.lower() == ".png" and visual_provider == "dota":
-            image = _dota_item_background(background, width, height)
+        elif visual_provider == "dota" and background.suffix.lower() == ".png":
+            image = _dota_item_background(
+                background, width, height, scene.visual_hint
+            )
+        elif visual_provider == "dota" and background.suffix.lower() in VIDEO_SUFFIXES:
+            image = _dota_backdrop(width, height, index)
         else:
             image = _photo_background(background, width, height)
         background_path = background_dir / f"scene-{index + 1:02d}.jpg"
         image.save(background_path, quality=94)
-        render_source = (
-            background
-            if background and background.suffix.lower() in VIDEO_SUFFIXES
-            else background_path
-        )
+        render_source: Path = background_path
+        if background and background.suffix.lower() in VIDEO_SUFFIXES:
+            if visual_provider == "dota":
+                animated_source = source_dir / f"scene-{index + 1:02d}.mp4"
+                if _dota_hero_clip(
+                    background, background_path, animated_source, width, height
+                ):
+                    render_source = animated_source
+                else:
+                    image = _dota_hero_poster(background, image)
+                    image.save(background_path, quality=94)
+            else:
+                render_source = background
 
-        overlay = (
-            _dota_atmosphere(width, height, index)
-            if visual_provider == "dota"
-            else Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        )
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay, "RGBA")
         if background is None:
             _decorations(draw, width, height, palette[2], randomizer)
         title_size = max(18, width // (12 if index == 0 else 13))
         title_font = _font(config, title_size, bold=True)
 
-        _draw_title_card(overlay, config, scene.screen_text, title_font, index == 0)
+        _draw_asset_badge(overlay, config, scene.visual_hint)
+        _draw_title_card(overlay, config, scene.screen_text, title_font, index)
 
         overlay_path = overlay_dir / f"scene-{index + 1:02d}.png"
         overlay.save(overlay_path)
@@ -121,32 +137,287 @@ def _photo_background(path: Path, width: int, height: int) -> Image.Image:
     return Image.alpha_composite(tinted, shade).convert("RGB")
 
 
-def _dota_item_background(path: Path, width: int, height: int) -> Image.Image:
+def _dota_backdrop(width: int, height: int, index: int) -> Image.Image:
+    """Build a clean stage so a Dota asset reads instantly on a phone."""
+    base = _gradient(width, height, "#070B0E", "#170805").convert("RGBA")
+    base = Image.alpha_composite(base, _dota_atmosphere(width, height, index))
+    grid = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(grid, "RGBA")
+    center = (width // 2, int(height * 0.30))
+    for radius, alpha in ((390, 22), (300, 30), (210, 38)):
+        draw.ellipse(
+            (
+                center[0] - radius,
+                center[1] - radius,
+                center[0] + radius,
+                center[1] + radius,
+            ),
+            outline=(232, 151, 73, alpha),
+            width=3,
+        )
+    draw.line((0, int(height * 0.47), width, int(height * 0.47)), fill=(255, 190, 90, 26), width=2)
+    return Image.alpha_composite(base, grid).convert("RGB")
+
+
+def _dota_item_background(
+    path: Path, width: int, height: int, visual_hint: str
+) -> Image.Image:
     """Turn a small official item icon into a deliberate Dota-style poster."""
-    base = _gradient(width, height, "#07110D", "#2A0B08").convert("RGBA")
+    base = _dota_backdrop(width, height, 0).convert("RGBA")
     with Image.open(path) as source:
         icon = ImageOps.exif_transpose(source).convert("RGBA")
-    scale = min(int(width * 0.58) / icon.width, int(height * 0.30) / icon.height)
+    scale = min(int(width * 0.36) / icon.width, int(height * 0.18) / icon.height)
     icon = icon.resize(
         (max(1, round(icon.width * scale)), max(1, round(icon.height * scale))),
-        Image.Resampling.LANCZOS,
+        Image.Resampling.NEAREST,
     )
     x = (width - icon.width) // 2
-    y = int(height * 0.22)
+    y = int(height * 0.19)
     glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow, "RGBA")
-    padding = max(icon.width, icon.height) // 2
+    card_padding_x = 58
+    card_padding_y = 52
+    card = (
+        x - card_padding_x,
+        y - card_padding_y,
+        x + icon.width + card_padding_x,
+        y + icon.height + card_padding_y,
+    )
+    glow_draw.rounded_rectangle(
+        card,
+        radius=38,
+        fill=(6, 12, 14, 225),
+        outline=(242, 156, 67, 205),
+        width=5,
+    )
+    padding = max(icon.width, icon.height) // 3
     glow_draw.ellipse(
         (x - padding, y - padding, x + icon.width + padding, y + icon.height + padding),
-        fill=(240, 90, 35, 125),
+        fill=(240, 90, 35, 85),
     )
-    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(95)))
+    soft_glow = glow.filter(ImageFilter.GaussianBlur(50))
+    base = Image.alpha_composite(base, soft_glow)
+    base = Image.alpha_composite(base, glow)
     shadow = Image.new("RGBA", icon.size, (0, 0, 0, 180)).filter(
-        ImageFilter.GaussianBlur(18)
+        ImageFilter.GaussianBlur(10)
     )
-    base.alpha_composite(shadow, (x + 12, y + 18))
+    base.alpha_composite(shadow, (x + 8, y + 12))
     base.alpha_composite(icon, (x, y))
+    draw = ImageDraw.Draw(base, "RGBA")
+    label = _asset_label(visual_hint)
+    font = _fallback_font(max(24, width // 25), bold=True)
+    bounds = draw.textbbox((0, 0), label, font=font)
+    label_x = (width - (bounds[2] - bounds[0])) // 2
+    label_y = card[3] + 42
+    draw.text(
+        (label_x, label_y),
+        label,
+        font=font,
+        fill=(255, 221, 164, 245),
+        stroke_width=2,
+        stroke_fill=(0, 0, 0, 210),
+    )
     return base.convert("RGB")
+
+
+def _dota_map_background(
+    width: int, height: int, mode: str, scene_index: int
+) -> Image.Image:
+    """Draw a phone-readable tactical map instead of an unrelated hero render."""
+    base = _dota_backdrop(width, height, scene_index).convert("RGBA")
+    layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer, "RGBA")
+    map_size = int(width * 0.78)
+    left = (width - map_size) // 2
+    top = int(height * 0.075)
+    right = left + map_size
+    bottom = top + map_size
+    draw.rounded_rectangle(
+        (left - 18, top - 18, right + 18, bottom + 18),
+        radius=42,
+        fill=(2, 7, 7, 235),
+        outline=(232, 158, 76, 190),
+        width=5,
+    )
+    draw.rounded_rectangle(
+        (left, top, right, bottom), radius=28, fill=(17, 38, 29, 255)
+    )
+
+    # River and three lanes: schematic, deliberately clearer than a tiny minimap screenshot.
+    river = [
+        (left, top + int(map_size * 0.67)),
+        (left + int(map_size * 0.18), top + int(map_size * 0.58)),
+        (left + int(map_size * 0.42), top + int(map_size * 0.51)),
+        (left + int(map_size * 0.68), top + int(map_size * 0.40)),
+        (right, top + int(map_size * 0.30)),
+    ]
+    draw.line(river, fill=(54, 121, 143, 210), width=max(20, width // 28), joint="curve")
+    lane_color = (186, 176, 134, 105)
+    draw.line((left + 55, bottom - 60, right - 55, top + 60), fill=lane_color, width=12)
+    draw.line(
+        (left + 60, bottom - 70, left + 70, top + 80, right - 65, top + 60),
+        fill=lane_color,
+        width=9,
+        joint="curve",
+    )
+    draw.line(
+        (left + 60, bottom - 70, right - 75, bottom - 70, right - 65, top + 60),
+        fill=lane_color,
+        width=9,
+        joint="curve",
+    )
+    draw.ellipse(
+        (left + 35, bottom - 115, left + 135, bottom - 15),
+        fill=(56, 190, 105, 230),
+        outline=(158, 255, 190, 230),
+        width=5,
+    )
+    draw.ellipse(
+        (right - 135, top + 15, right - 35, top + 115),
+        fill=(210, 65, 61, 230),
+        outline=(255, 151, 139, 230),
+        width=5,
+    )
+
+    roshan = (left + int(map_size * 0.42), top + int(map_size * 0.50))
+    draw.ellipse(
+        (roshan[0] - 66, roshan[1] - 66, roshan[0] + 66, roshan[1] + 66),
+        fill=(68, 25, 15, 245),
+        outline=(255, 163, 65, 255),
+        width=8,
+    )
+    roshan_font = _fallback_font(max(20, width // 34), bold=True)
+    roshan_text = "ROSHAN"
+    bounds = draw.textbbox((0, 0), roshan_text, font=roshan_font)
+    draw.text(
+        (roshan[0] - (bounds[2] - bounds[0]) // 2, roshan[1] - roshan_font.size // 2),
+        roshan_text,
+        font=roshan_font,
+        fill=(255, 222, 165, 255),
+    )
+
+    normalized = mode.casefold()
+    ward = (roshan[0] + 120, roshan[1] - 115)
+    if any(marker in normalized for marker in ("ward", "vision", "safe", "choice")):
+        radius = 145
+        draw.ellipse(
+            (ward[0] - radius, ward[1] - radius, ward[0] + radius, ward[1] + radius),
+            fill=(252, 202, 75, 36),
+            outline=(255, 218, 112, 160),
+            width=5,
+        )
+        draw.ellipse(
+            (ward[0] - 25, ward[1] - 25, ward[0] + 25, ward[1] + 25),
+            fill=(255, 215, 78, 255),
+            outline=(255, 247, 201, 255),
+            width=4,
+        )
+        draw.line((ward[0], ward[1] + 20, ward[0], ward[1] + 62), fill=(255, 225, 111, 255), width=8)
+
+    enemy_points = (
+        (roshan[0] + 200, roshan[1] - 8),
+        (roshan[0] + 155, roshan[1] + 90),
+        (roshan[0] + 245, roshan[1] + 110),
+    )
+    if any(marker in normalized for marker in ("danger", "loss", "choice")):
+        for x, y in enemy_points:
+            draw.ellipse((x - 24, y - 24, x + 24, y + 24), fill=(242, 70, 65, 255))
+        draw.line(
+            (enemy_points[0][0], enemy_points[0][1], roshan[0] + 60, roshan[1]),
+            fill=(255, 85, 75, 230),
+            width=12,
+        )
+        arrow_tip = (roshan[0] + 50, roshan[1])
+        draw.polygon(
+            (
+                arrow_tip,
+                (arrow_tip[0] + 36, arrow_tip[1] - 26),
+                (arrow_tip[0] + 36, arrow_tip[1] + 26),
+            ),
+            fill=(255, 85, 75, 240),
+        )
+
+    if "loss" in normalized:
+        skull_font = _fallback_font(max(54, width // 12), bold=True)
+        draw.text(
+            (roshan[0] - 25, roshan[1] + 90),
+            "×",
+            font=skull_font,
+            fill=(255, 76, 69, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 230),
+        )
+
+    return Image.alpha_composite(base, layer).convert("RGB")
+
+
+def _dota_hero_clip(
+    hero_path: Path,
+    backdrop_path: Path,
+    target: Path,
+    width: int,
+    height: int,
+) -> bool:
+    """Composite an official transparent hero render without cropping the hero."""
+    hero_size = min(int(width * 0.88), int(height * 0.49))
+    hero_y = max(25, int(height * 0.035))
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "30",
+        "-i",
+        str(backdrop_path),
+        "-stream_loop",
+        "-1",
+        "-c:v",
+        "libvpx-vp9",
+        "-i",
+        str(hero_path),
+        "-filter_complex",
+        (
+            f"[0:v]scale={width}:{height},format=rgba[stage];"
+            f"[1:v]scale={hero_size}:{hero_size}:force_original_aspect_ratio=decrease,"
+            "format=rgba[hero];"
+            f"[stage][hero]overlay=x=(W-w)/2:y={hero_y}:format=auto,format=yuv420p[v]"
+        ),
+        "-map",
+        "[v]",
+        "-t",
+        "4",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        str(target),
+    ]
+    try:
+        subprocess.run(command, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        target.unlink(missing_ok=True)
+        return False
+    return target.is_file()
+
+
+def _dota_hero_poster(path: Path, backdrop: Image.Image) -> Image.Image:
+    """Static fallback for ffmpeg builds that cannot decode VP9 alpha."""
+    with _video_poster(path) as source:
+        hero = source.convert("RGBA")
+    size = min(int(backdrop.width * 0.88), int(backdrop.height * 0.49))
+    hero.thumbnail((size, size), Image.Resampling.LANCZOS)
+    stage = backdrop.convert("RGBA")
+    stage.alpha_composite(hero, ((stage.width - hero.width) // 2, int(stage.height * 0.035)))
+    return stage.convert("RGB")
 
 
 def _video_poster(path: Path) -> Image.Image:
@@ -158,6 +429,7 @@ def _video_poster(path: Path) -> Image.Image:
             "error",
             "-ss",
             "0.4",
+            *(["-c:v", "libvpx-vp9"] if path.suffix.lower() == ".webm" else []),
             "-i",
             str(path),
             "-frames:v",
@@ -179,9 +451,10 @@ def _draw_title_card(
     config: AppConfig,
     text: str,
     font: ImageFont.FreeTypeFont,
-    is_hook: bool,
+    scene_index: int,
 ) -> None:
     width, height = image.size
+    is_hook = scene_index == 0
     measure = ImageDraw.Draw(image)
     card_margin = max(12, width // 15)
     horizontal_padding = max(20, width // 9)
@@ -189,8 +462,8 @@ def _draw_title_card(
     lines = _wrap_text(measure, text.upper(), font, text_width)
     line_height = int(font.size * 1.12)
     block_height = len(lines) * line_height
-    card_bottom = int(height * (0.70 if is_hook else 0.68))
-    vertical_padding = max(28, height // 17)
+    card_bottom = int(height * 0.70)
+    vertical_padding = max(24, height // 24)
     card_top = card_bottom - block_height - vertical_padding
     card = (card_margin, card_top, width - card_margin, card_bottom)
     radius = max(10, width // 22)
@@ -209,9 +482,37 @@ def _draw_title_card(
     draw.rounded_rectangle(
         card,
         radius=radius,
-        fill=(3, 10, 22, 138),
-        outline=(240, 112, 54, 86),
-        width=2,
+        fill=(3, 8, 14, 205),
+        outline=(240, 148, 70, 155),
+        width=3,
+    )
+    phase_labels = ("ПРОБЛЕМА", "СТАВКА", "ЧТО ДЕЛАТЬ", "РЕШЕНИЕ", "ПОЧЕМУ", "ТВОЙ ВЫБОР")
+    phase_colors = (
+        (242, 82, 72, 255),
+        (245, 158, 61, 255),
+        (75, 196, 126, 255),
+        (75, 196, 126, 255),
+        (94, 171, 255, 255),
+        (174, 112, 255, 255),
+    )
+    phase = phase_labels[min(scene_index, len(phase_labels) - 1)]
+    phase_color = phase_colors[min(scene_index, len(phase_colors) - 1)]
+    phase_font = _font(config, max(22, width // 31), bold=True)
+    phase_bounds = draw.textbbox((0, 0), phase, font=phase_font)
+    phase_width = phase_bounds[2] - phase_bounds[0]
+    phase_height = phase_bounds[3] - phase_bounds[1]
+    pill = (
+        width // 2 - phase_width // 2 - 28,
+        card_top - phase_height - 42,
+        width // 2 + phase_width // 2 + 28,
+        card_top - 18,
+    )
+    draw.rounded_rectangle(pill, radius=18, fill=(5, 9, 14, 235), outline=phase_color, width=3)
+    draw.text(
+        ((width - phase_width) // 2, pill[1] + 8),
+        phase,
+        font=phase_font,
+        fill=phase_color,
     )
     y = card_top + vertical_padding // 2
     for line_index, line in enumerate(lines):
@@ -238,6 +539,52 @@ def _draw_title_card(
             stroke_fill=(5, 15, 30, 190),
         )
         y += line_height
+
+
+def _draw_asset_badge(image: Image.Image, config: AppConfig, visual_hint: str) -> None:
+    if visual_hint.casefold().startswith(("item:", "map:")):
+        return
+    label = _asset_label(visual_hint)
+    if not label:
+        return
+    width, height = image.size
+    draw = ImageDraw.Draw(image, "RGBA")
+    font = _font(config, max(20, width // 34), bold=True)
+    bounds = draw.textbbox((0, 0), label, font=font)
+    text_width = bounds[2] - bounds[0]
+    y = int(height * 0.48)
+    card = (width // 2 - text_width // 2 - 24, y, width // 2 + text_width // 2 + 24, y + font.size + 24)
+    draw.rounded_rectangle(card, radius=16, fill=(4, 9, 13, 215), outline=(255, 188, 92, 140), width=2)
+    draw.text(((width - text_width) // 2, y + 9), label, font=font, fill=(255, 221, 164, 255))
+
+
+def _asset_label(visual_hint: str) -> str:
+    raw = visual_hint.partition(":")[2].strip().casefold()
+    aliases = {
+        "ward_observer": "OBSERVER WARD",
+        "ward_sentry": "SENTRY WARD",
+        "black_king_bar": "BLACK KING BAR",
+        "blink": "BLINK DAGGER",
+        "aegis": "AEGIS",
+        "cheese": "CHEESE",
+        "nevermore": "SHADOW FIEND",
+        "skeleton_king": "WRAITH KING",
+        "windrunner": "WINDRANGER",
+    }
+    return aliases.get(raw, raw.replace("_", " ").upper())
+
+
+def _fallback_font(size: int, *, bold: bool) -> ImageFont.FreeTypeFont:
+    candidates = [
+        r"C:\Windows\Fonts\seguisb.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        if bold
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return ImageFont.truetype(candidate, size=size)
+    return ImageFont.load_default(size=size)
 
 
 def _gradient(width: int, height: int, top_hex: str, bottom_hex: str) -> Image.Image:

@@ -49,6 +49,8 @@ def parser() -> argparse.ArgumentParser:
     )
     commands.add_parser("can-upload", help="проверить автоматические лимиты публикации")
     commands.add_parser("list", help="показать очередь")
+    map_render = commands.add_parser("render-map", help="собрать ролик из шаблона Map Studio")
+    map_render.add_argument("--story", type=Path, required=True, help="JSON шаблона")
     inspect = commands.add_parser("inspect", help="проверить итоговый mp4")
     inspect.add_argument("id", type=int)
     rerender = commands.add_parser("rerender", help="пересобрать существующий черновик")
@@ -71,6 +73,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         config = load_config(Path(args.config))
         queue = QueueStore(config.root / "data" / "queue.db")
+        if args.command == "render-map":
+            from .pipeline import build_map_short
+
+            item_id, output_dir = build_map_short(config, args.story)
+            print(f"Черновик #{item_id}: {output_dir / 'short.mp4'}")
+            return 0
         if args.command == "doctor":
             report = _doctor(config)
             print(

@@ -14,6 +14,35 @@ from .tts import synthesize
 from .visuals import create_frames
 
 
+def build_map_short(config: AppConfig, story_path: Path) -> tuple[int, Path]:
+    """Use an exported editor template in the same draft/upload queue as other Shorts."""
+    from .models import Scene, VideoPlan
+    from .tactical import render_story, validate_story
+
+    story = validate_story(json.loads(story_path.read_text(encoding="utf-8-sig")))
+    queue = QueueStore(config.root / "data" / "queue.db")
+    topic = story["title"]
+    if queue.exists(topic):
+        raise ValueError("Такой шаблон уже собран; измените название для новой версии")
+    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+    output_dir = config.root / "output" / f"{stamp}-map-studio"
+    video = render_story(config, story, output_dir, progress=lambda msg: print(msg, flush=True))
+    plan = VideoPlan(
+        topic=topic,
+        title=topic[:85] + " #dota2 #shorts",
+        description="Учебный разбор ситуации в Dota 2. " + story["scenes"][-1]["narration"],
+        tags=["dota2", "дота2", "shorts", "разбор", "тактика"],
+        scenes=[Scene(s["narration"], s["caption"], "tactical:custom") for s in story["scenes"]],
+    )
+    (output_dir / "plan.json").write_text(
+        json.dumps(plan.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    (output_dir / "probe.json").write_text(
+        json.dumps(probe_video(video), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return queue.add(topic, output_dir), output_dir
+
+
 def build_short(config: AppConfig, topic: str, *, demo: bool = False) -> tuple[int, Path]:
     queue = QueueStore(config.root / "data" / "queue.db")
     if queue.exists(topic):
