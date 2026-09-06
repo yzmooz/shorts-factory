@@ -35,6 +35,7 @@ const toolDefs = [
   ["zone", "◯", "Зона обзора"],
   ["fog", "◉", "Туман"],
   ["ward", "⊙", "Вард"],
+  ["ability", "✦", "Способность"],
   ["text", "T", "Подпись"],
 ];
 const scene = () => story.scenes[index],
@@ -96,6 +97,7 @@ function setTool(next) {
     zone: "Протяни от центра до края зоны.",
     fog: "Протяни, чтобы скрыть участок карты.",
     ward: "Кликни, чтобы поставить вард.",
+    ability: "Протяни от героя к цели: AoE, снаряд, Blink, контроль или урон.",
     text: "Кликни на карту и впиши подпись справа.",
     hero: "Кликни на карту или перетащи портрет героя.",
     route: "Проведи маршрут от героя к конечной точке.",
@@ -158,7 +160,13 @@ function properties() {
   $("object-panel").hidden = !o;
   if (!o) return;
   $("object-text").value = o.text || "";
-  $("object-text").parentElement.hidden = o.type !== "text";
+  $("object-text").parentElement.hidden = !["text", "ability"].includes(o.type);
+  $("ability-panel").hidden = o.type !== "ability";
+  if (o.type === "ability") {
+    $("ability-name").value = o.ability || "ABILITY";
+    $("ability-effect").value = o.effect || "aoe";
+    $("ability-value").value = o.value || "";
+  }
   $("object-hidden").parentElement.hidden = o.type !== "hero";
   $("object-hidden").checked = !!o.hidden;
   $("route").hidden = o.type !== "hero";
@@ -266,8 +274,9 @@ function linePoints(points, t) {
 }
 function paintMap(g) {
   const ordered = [...scene().objects].sort((a, b) =>
-    ({ arrow: 0, draw: 0, text: 2 }[a.type] ?? 1) -
-    ({ arrow: 0, draw: 0, text: 2 }[b.type] ?? 1));
+    ({ arrow: 0, draw: 0, ability: 1, hero: 2, text: 3 }[a.type] ?? 2) -
+    ({ arrow: 0, draw: 0, ability: 1, hero: 2, text: 3 }[b.type] ?? 2),
+  );
   const b = box();
   g.clearRect(0, 0, 1008, 980);
   g.fillStyle = "#090f17";
@@ -383,6 +392,109 @@ function paintMap(g) {
       const [x, y] = point([o.x, o.y], b);
       circle(g, x, y, 38, "#101b1e", C.gold, 3);
       g.drawImage(images.observer, x - 31, y - 23, 62, 46);
+    } else if (o.type === "ability") {
+      const abilityColors = {
+          aoe: "#ffb454",
+          projectile: "#8bd5ff",
+          blink: "#d49bff",
+          control: "#ff6b76",
+          damage: "#ffdb6e",
+        },
+        effect = o.effect || "aoe",
+        ac = abilityColors[effect] || abilityColors.aoe,
+        origin = point([o.x, o.y], b),
+        target = point(o.target || [o.x, o.y], b),
+        progress = o.reveal === false ? 1 : Math.min(1, time * 1.55 + 0.04),
+        current = [
+          origin[0] + (target[0] - origin[0]) * progress,
+          origin[1] + (target[1] - origin[1]) * progress,
+        ],
+        radius = ((o.radius || 0.055) / b.w) * 1008;
+      g.save();
+      g.shadowColor = ac;
+      g.shadowBlur = 16;
+      if (effect === "projectile") {
+        g.lineWidth = 14;
+        g.strokeStyle = "#050b11dd";
+        g.beginPath();
+        g.moveTo(...origin);
+        g.lineTo(...current);
+        g.stroke();
+        g.lineWidth = 7;
+        g.strokeStyle = ac;
+        g.beginPath();
+        g.moveTo(...origin);
+        g.lineTo(...current);
+        g.stroke();
+        circle(g, current[0], current[1], 14, ac, "#fff", 2);
+      } else if (effect === "blink") {
+        g.setLineDash([18, 12]);
+        g.lineWidth = 6;
+        g.strokeStyle = ac;
+        g.beginPath();
+        g.moveTo(...origin);
+        g.lineTo(...target);
+        g.stroke();
+        g.setLineDash([]);
+        circle(g, current[0], current[1], radius * 0.65, ac + "34", ac, 5);
+        circle(g, current[0], current[1], radius * 0.3, ac + "80");
+      } else if (effect === "control") {
+        circle(g, target[0], target[1], radius, ac + "26", ac, 6);
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4;
+          g.beginPath();
+          g.moveTo(
+            target[0] + Math.cos(a) * radius * 0.72,
+            target[1] + Math.sin(a) * radius * 0.72,
+          );
+          g.lineTo(
+            target[0] + Math.cos(a) * radius * 1.15,
+            target[1] + Math.sin(a) * radius * 1.15,
+          );
+          g.strokeStyle = ac;
+          g.lineWidth = 5;
+          g.stroke();
+        }
+      } else {
+        const pulse = radius * (0.82 + 0.18 * ((time * 2.2) % 1));
+        circle(g, target[0], target[1], pulse, ac + "30", ac, 5);
+        if (effect === "damage") {
+          for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI) / 4;
+            g.beginPath();
+            g.moveTo(
+              target[0] + Math.cos(a) * pulse * 0.8,
+              target[1] + Math.sin(a) * pulse * 0.8,
+            );
+            g.lineTo(
+              target[0] + Math.cos(a) * pulse * 1.35,
+              target[1] + Math.sin(a) * pulse * 1.35,
+            );
+            g.strokeStyle = ac;
+            g.lineWidth = 5;
+            g.stroke();
+          }
+        }
+      }
+      g.shadowBlur = 0;
+      const caster = images[o.caster];
+      if (caster) {
+        g.save();
+        circle(g, origin[0], origin[1], 28, "#071018", ac, 3);
+        g.clip();
+        g.drawImage(caster, origin[0] - 24, origin[1] - 24, 48, 48);
+        g.restore();
+      }
+      const label =
+        String(o.ability || "ABILITY").toUpperCase() +
+        (o.value ? " · " + o.value : "");
+      g.font = "700 22px Arial";
+      const w = g.measureText(label).width;
+      const lx = Math.max(w / 2 + 12, Math.min(996 - w / 2, target[0])),
+        ly = Math.max(8, target[1] - radius - 34);
+      round(g, lx - w / 2 - 10, ly - 5, w + 20, 34, 9, "#050b11e8", ac);
+      text(g, label, lx - w / 2, ly, 22, ac, 960, 1);
+      g.restore();
     } else if (o.type === "text") {
       let [x, y] = point([o.x, o.y], b);
       g.font = "700 29px Arial";
@@ -479,6 +591,12 @@ function hit(p) {
     if (o.points) {
       return o.points.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < r);
     }
+    if (o.type === "ability" && o.target) {
+      return (
+        Math.hypot(o.x - p[0], o.y - p[1]) < r ||
+        Math.hypot(o.target[0] - p[0], o.target[1] - p[1]) < r
+      );
+    }
     return (
       Math.hypot(o.x - p[0], o.y - p[1]) <
       (o.type === "zone" || o.type === "fog" ? o.radius : r)
@@ -524,6 +642,18 @@ map.onpointerdown = (e) => {
   if (tool === "hero") o = { ...o, asset: hero, team, path: [p, p] };
   if (tool === "ward") o.color = "gold";
   if (tool === "text") o.text = "Подпись";
+  if (tool === "ability") {
+    o = {
+      ...o,
+      ability: "ABILITY",
+      caster: hero,
+      effect: "aoe",
+      target: [p[0], p[1]],
+      radius: 0.055,
+      value: "",
+      reveal: true,
+    };
+  }
   if (tool === "zone" || tool === "fog") {
     o.radius = 0.01;
     o.color = tool === "zone" ? "gold" : "enemy";
@@ -581,6 +711,8 @@ map.onpointermove = (e) => {
           clamp(q[0] + dx),
           clamp(q[1] + dy),
         ]);
+    if (drag.object.target)
+      o.target = [clamp(drag.object.target[0] + dx), clamp(drag.object.target[1] + dy)];
   } else if (drag.type === "route" && o) {
     if (Math.hypot(p[0] - o.path.at(-1)[0], p[1] - o.path.at(-1)[1]) > 0.002)
       o.path.push(p);
@@ -602,6 +734,7 @@ map.onpointermove = (e) => {
           o.points.push(p);
       } else o.points[1] = p;
     }
+    if (o.type === "ability") o.target = p;
   }
   dirty = true;
 };
@@ -684,6 +817,23 @@ $("object-text").onfocus = () => checkpoint();
 $("object-text").oninput = () => {
   if (obj()) {
     obj().text = $("object-text").value;
+    changed();
+  }
+};
+for (const field of ["ability-name", "ability-value"]) {
+  $(field).onfocus = () => checkpoint();
+  $(field).oninput = () => {
+    if (obj()?.type === "ability") {
+      if (field === "ability-name") obj().ability = $(field).value;
+      else obj().value = $(field).value;
+      changed();
+    }
+  };
+}
+$("ability-effect").onchange = () => {
+  if (obj()?.type === "ability") {
+    checkpoint();
+    obj().effect = $("ability-effect").value;
     changed();
   }
 };

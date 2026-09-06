@@ -24,6 +24,13 @@ HEROES = {
     "nevermore": "Shadow Fiend",
 }
 COLORS = {"ally": "#65f1c2", "enemy": "#ff6b76", "gold": "#ffd78b"}
+ABILITY_COLORS = {
+    "aoe": "#ffb454",
+    "projectile": "#8bd5ff",
+    "blink": "#d49bff",
+    "control": "#ff6b76",
+    "damage": "#ffdb6e",
+}
 MAP_BOX = (36, 290, 1044, 1270)
 
 
@@ -43,6 +50,21 @@ def default_story() -> dict:
 
     def text(label, x, y, color="gold"):
         return {"type": "text", "text": label, "x": x, "y": y, "color": color}
+
+    def ability(name, caster, origin, target, effect, color="enemy", radius=0.055, value=""):
+        return {
+            "type": "ability",
+            "ability": name,
+            "caster": caster,
+            "effect": effect,
+            "x": origin[0],
+            "y": origin[1],
+            "target": list(target),
+            "radius": radius,
+            "value": value,
+            "color": color,
+            "reveal": True,
+        }
 
     camera = {"x": 0.343, "y": 0.396, "zoom": 2.5}
     allies = [hero("ursa", (0.323, 0.405)), hero("crystal_maiden", (0.343, 0.448))]
@@ -84,25 +106,45 @@ def default_story() -> dict:
             allies + [ward, zone, text("ОБЗОР ПОДХОДА", 0.385, 0.297)],
         ),
         (
-            "ЗАМЕТИЛ ПОДХОД?",
-            "Заметил врагов? Остановись и оцени, нужна ли драка.",
-            "ИНФОРМАЦИЯ ДАЁТ ВЫБОР",
+            "ТИМФАЙТ У РОШАНА",
+            "Вижен дал первый ход. Earthshaker врывается, а Lion держит саппорта.",
+            "ПЕРВЫЙ СКИЛЛ — ПЕРВАЯ ЦЕЛЬ",
             allies
             + [
                 ward,
                 zone,
                 hero("earthshaker", (0.439, 0.329), "enemy", (0.398, 0.337)),
+                hero("lion", (0.457, 0.407), "enemy", (0.405, 0.417)),
+                ability("FISSURE", "earthshaker", (0.439, 0.329), (0.382, 0.389), "projectile"),
+                ability("EARTH SPIKE", "lion", (0.457, 0.407), (0.355, 0.431), "projectile"),
+                ability("BLINK", "ursa", (0.323, 0.405), (0.365, 0.399), "blink", "ally"),
                 text("ВРАГ НА ПОДХОДЕ", 0.423, 0.306, "enemy"),
             ],
         ),
         (
-            "ВЫХОД ЕЩЁ ЕСТЬ",
-            "Не можешь принять бой — выходи вместе с командой.",
-            "НЕ ОТДАВАЙ ЖИЗНИ СЛЕДОМ",
+            "НЕ НАЖИМАЙ ВСЁ СРАЗУ",
+            "После инициации дай команде фокус: контроль, урон, выход.",
+            "КОНТРОЛЬ → УРОН → ОТХОД",
             [
                 hero("ursa", (0.323, 0.405), end=(0.287, 0.475)),
                 hero("crystal_maiden", (0.343, 0.448), end=(0.304, 0.487)),
+                hero("earthshaker", (0.398, 0.337), "enemy", end=(0.414, 0.358)),
+                hero("lion", (0.405, 0.417), "enemy", end=(0.424, 0.435)),
                 ward,
+                ability(
+                    "FISSURE", "earthshaker", (0.398, 0.337), (0.372, 0.405), "aoe", radius=0.052
+                ),
+                ability("HEX", "lion", (0.405, 0.417), (0.323, 0.405), "control", radius=0.032),
+                ability(
+                    "OVERPOWER",
+                    "ursa",
+                    (0.323, 0.405),
+                    (0.323, 0.405),
+                    "damage",
+                    "ally",
+                    radius=0.042,
+                    value="+6 ударов",
+                ),
                 {
                     "type": "arrow",
                     "points": [[0.323, 0.42], [0.315, 0.462], [0.287, 0.484]],
@@ -112,7 +154,7 @@ def default_story() -> dict:
             ],
         ),
         (
-            "ДОБИВАТЬ ИЛИ УЙТИ?",
+            "ФОКУС ИЛИ ОТХОД?",
             "Рискнёшь ради Рошана или сохранишь команду?",
             "А ТЫ КАК ПОСТУПИШЬ?",
             [
@@ -154,7 +196,7 @@ def validate_story(story: dict) -> dict:
     scenes = story.get("scenes", [])
     if not isinstance(scenes, list) or not 1 <= len(scenes) <= 16:
         raise ValueError("Нужно от 1 до 16 сцен")
-    kinds = {"hero", "ward", "text", "arrow", "draw", "zone", "fog"}
+    kinds = {"hero", "ward", "text", "arrow", "draw", "zone", "fog", "ability"}
     for scene in scenes:
         if not 0.5 <= float(scene.get("duration", 0)) <= 30:
             raise ValueError("Длительность сцены должна быть от 0.5 до 30 секунд")
@@ -173,9 +215,18 @@ def validate_story(story: dict) -> dict:
         for obj in objects:
             if obj.get("type") not in kinds:
                 raise ValueError("Неизвестный объект карты")
+            numbers = [obj[k] for k in ("x", "y", "radius") if k in obj]
             if obj["type"] == "hero" and obj.get("asset") not in HEROES:
                 raise ValueError("Портрет героя недоступен")
-            numbers = [obj[k] for k in ("x", "y", "radius") if k in obj]
+            if obj["type"] == "ability":
+                if not isinstance(obj.get("ability", ""), str) or not obj.get("ability"):
+                    raise ValueError("У способности нет названия")
+                if obj.get("effect") not in ABILITY_COLORS:
+                    raise ValueError("Неизвестный тип эффекта способности")
+                target = obj.get("target", [obj.get("x"), obj.get("y")])
+                if not isinstance(target, list) or len(target) != 2:
+                    raise ValueError("Неверная цель способности")
+                numbers.extend(target)
             for field in ("points", "path"):
                 points = obj.get(field, [])
                 if not isinstance(points, list) or len(points) > 500:
@@ -273,7 +324,8 @@ class MapPainter:
         layer = Image.new("RGBA", crop.size)
         ld = ImageDraw.Draw(layer)
         ordered = sorted(
-            scene["objects"], key=lambda o: {"arrow": 0, "draw": 0, "text": 2}.get(o["type"], 1)
+            scene["objects"],
+            key=lambda o: {"arrow": 0, "draw": 0, "ability": 1, "text": 3}.get(o["type"], 2),
         )
         for obj in ordered:
             if obj["type"] in {"fog", "zone"}:
@@ -345,6 +397,8 @@ class MapPainter:
                     width=3,
                 )
                 crop.alpha_composite(self.ward, (x - 31, y - 23))
+            elif kind == "ability":
+                self._draw_ability(crop, ld, obj, pos, t, mw, mh, cw)
             elif kind == "text":
                 x, y = pos(obj["x"], obj["y"])
                 label = obj.get("text", "")[:60]
@@ -404,6 +458,155 @@ class MapPainter:
             return MapPainter._text(draw, text, xy, size - 3, maxw, color, maxlines)
         for i, line in enumerate(lines[:maxlines]):
             draw.text((xy[0], xy[1] + i * int(size * 1.16)), line, font=f, fill=color)
+
+    def _draw_ability(self, image, draw, obj, pos, t, width, height, camera_width):
+        """Draw a readable, game-inspired spell beat without requiring gameplay footage."""
+        effect = obj.get("effect", "aoe")
+        rgb = tuple(bytes.fromhex(ABILITY_COLORS.get(effect, ABILITY_COLORS["aoe"])[1:]))
+        origin = pos(float(obj.get("x", 0)), float(obj.get("y", 0)))
+        target_raw = obj.get("target", [obj.get("x", 0), obj.get("y", 0)])
+        target = pos(float(target_raw[0]), float(target_raw[1]))
+        progress = min(1.0, t * 1.55 + 0.04) if obj.get("reveal", True) else 1.0
+        current = interpolate([origin, target], progress)
+        line_width = max(7, round(width / 115))
+        radius = max(16, obj.get("radius", 0.055) / camera_width * width)
+
+        if effect == "projectile":
+            draw.line((origin, current), fill=(5, 10, 17, 220), width=line_width + 12)
+            draw.line((origin, current), fill=(*rgb, 235), width=line_width)
+            draw.ellipse(
+                (
+                    current[0] - line_width * 1.8,
+                    current[1] - line_width * 1.8,
+                    current[0] + line_width * 1.8,
+                    current[1] + line_width * 1.8,
+                ),
+                fill=(*rgb, 255),
+                outline=(255, 255, 255, 220),
+                width=3,
+            )
+        elif effect == "blink":
+            dash = max(16, round(width / 50))
+            distance = math.dist(origin, target)
+            steps = max(1, round(distance / dash))
+            for i in range(steps):
+                if i % 2:
+                    continue
+                a = interpolate([origin, target], i / steps)
+                b = interpolate([origin, target], min(1, (i + 1) / steps))
+                draw.line((a, b), fill=(*rgb, 180), width=max(4, line_width - 2))
+            draw.ellipse(
+                (
+                    current[0] - radius * 0.65,
+                    current[1] - radius * 0.65,
+                    current[0] + radius * 0.65,
+                    current[1] + radius * 0.65,
+                ),
+                outline=(*rgb, 230),
+                width=max(5, line_width - 1),
+            )
+            draw.ellipse(
+                (
+                    current[0] - radius * 0.32,
+                    current[1] - radius * 0.32,
+                    current[0] + radius * 0.32,
+                    current[1] + radius * 0.32,
+                ),
+                fill=(*rgb, 120),
+            )
+        elif effect == "aoe":
+            pulse = radius * (0.82 + 0.18 * ((t * 2.2) % 1))
+            draw.ellipse(
+                (target[0] - pulse, target[1] - pulse, target[0] + pulse, target[1] + pulse),
+                fill=(*rgb, 48),
+                outline=(*rgb, 235),
+                width=max(5, line_width - 1),
+            )
+            draw.ellipse(
+                (
+                    target[0] - radius * 0.42,
+                    target[1] - radius * 0.42,
+                    target[0] + radius * 0.42,
+                    target[1] + radius * 0.42,
+                ),
+                outline=(255, 255, 255, 180),
+                width=3,
+            )
+        elif effect == "control":
+            draw.ellipse(
+                (target[0] - radius, target[1] - radius, target[0] + radius, target[1] + radius),
+                fill=(*rgb, 38),
+                outline=(*rgb, 240),
+                width=max(5, line_width - 1),
+            )
+            for angle in range(0, 360, 45):
+                a = math.radians(angle)
+                draw.line(
+                    (
+                        target[0] + math.cos(a) * radius * 0.72,
+                        target[1] + math.sin(a) * radius * 0.72,
+                        target[0] + math.cos(a) * radius * 1.15,
+                        target[1] + math.sin(a) * radius * 1.15,
+                    ),
+                    fill=(*rgb, 235),
+                    width=max(4, line_width - 2),
+                )
+        elif effect == "damage":
+            burst = radius * (0.58 + 0.42 * progress)
+            draw.ellipse(
+                (target[0] - burst, target[1] - burst, target[0] + burst, target[1] + burst),
+                fill=(*rgb, 68),
+                outline=(*rgb, 245),
+                width=max(4, line_width - 2),
+            )
+            for angle in range(0, 360, 45):
+                a = math.radians(angle)
+                draw.line(
+                    (
+                        target[0] + math.cos(a) * burst * 0.8,
+                        target[1] + math.sin(a) * burst * 0.8,
+                        target[0] + math.cos(a) * burst * 1.35,
+                        target[1] + math.sin(a) * burst * 1.35,
+                    ),
+                    fill=(*rgb, 245),
+                    width=max(4, line_width - 2),
+                )
+
+        caster = self.portraits.get(obj.get("caster"))
+        if caster:
+            icon_size = max(34, round(width / 22))
+            icon = ImageOps.fit(caster, (icon_size, icon_size))
+            mask = Image.new("L", (icon_size, icon_size))
+            ImageDraw.Draw(mask).ellipse((0, 0, icon_size - 1, icon_size - 1), fill=255)
+            image.paste(
+                icon, (round(origin[0] - icon_size / 2), round(origin[1] - icon_size / 2)), mask
+            )
+            draw.ellipse(
+                (
+                    origin[0] - icon_size / 2,
+                    origin[1] - icon_size / 2,
+                    origin[0] + icon_size / 2,
+                    origin[1] + icon_size / 2,
+                ),
+                outline=(*rgb, 245),
+                width=3,
+            )
+        label = str(obj.get("ability", "ABILITY"))[:24].upper()
+        value = str(obj.get("value", ""))[:18]
+        label = f"{label}  {value}" if value else label
+        f = font(max(20, round(width / 34)))
+        bbox = draw.textbbox((0, 0), label, font=f)
+        tw = bbox[2] - bbox[0]
+        lx = min(width - tw / 2 - 12, max(tw / 2 + 12, target[0]))
+        ly = max(8, target[1] - radius - f.size - 16)
+        draw.rounded_rectangle(
+            (lx - tw / 2 - 10, ly - 5, lx + tw / 2 + 10, ly + f.size + 7),
+            10,
+            fill=(5, 11, 18, 225),
+            outline=(*rgb, 220),
+            width=2,
+        )
+        draw.text((lx - tw / 2, ly), label, font=f, fill=(*rgb, 255))
 
 
 def render_story(config: AppConfig, story: dict, output: Path, progress=lambda _: None) -> Path:

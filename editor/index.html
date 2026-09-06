@@ -136,6 +136,24 @@
             <button id="delete-object">Удалить</button>
           </div>
           <label>Подпись<input id="object-text" maxlength="60" /></label
+          ><div id="ability-panel" hidden>
+            <label
+              >Способность<input id="ability-name" maxlength="24" placeholder="FISSURE"
+            /></label>
+            <label
+              >Тип эффекта<select id="ability-effect">
+                <option value="aoe">AoE-зона</option>
+                <option value="projectile">Снаряд / линия</option>
+                <option value="blink">Blink / перемещение</option>
+                <option value="control">Stun / контроль</option>
+                <option value="damage">Урон / вспышка</option>
+              </select></label
+            >
+            <label
+              >Значение / таймер<input id="ability-value" maxlength="18" placeholder="-320 HP"
+            /></label>
+            <p class="muted">Портрет выбранного героя используется как кастер способности.</p>
+          </div
           ><label
             >Цвет<select id="object-color">
               <option value="ally">Мятный · союзники</option>
