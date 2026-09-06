@@ -51,7 +51,18 @@ def default_story() -> dict:
     def text(label, x, y, color="gold"):
         return {"type": "text", "text": label, "x": x, "y": y, "color": color}
 
-    def ability(name, caster, origin, target, effect, color="enemy", radius=0.055, value=""):
+    def ability(
+        name,
+        caster,
+        origin,
+        target,
+        effect,
+        color="enemy",
+        radius=0.055,
+        value="",
+        start=0.0,
+        end=1.0,
+    ):
         return {
             "type": "ability",
             "ability": name,
@@ -64,6 +75,8 @@ def default_story() -> dict:
             "value": value,
             "color": color,
             "reveal": True,
+            "start": start,
+            "end": end,
         }
 
     camera = {"x": 0.343, "y": 0.396, "zoom": 2.5}
@@ -115,10 +128,34 @@ def default_story() -> dict:
                 zone,
                 hero("earthshaker", (0.439, 0.329), "enemy", (0.398, 0.337)),
                 hero("lion", (0.457, 0.407), "enemy", (0.405, 0.417)),
-                ability("FISSURE", "earthshaker", (0.439, 0.329), (0.382, 0.389), "projectile"),
-                ability("EARTH SPIKE", "lion", (0.457, 0.407), (0.355, 0.431), "projectile"),
-                ability("BLINK", "ursa", (0.323, 0.405), (0.365, 0.399), "blink", "ally"),
-                text("ВРАГ НА ПОДХОДЕ", 0.423, 0.306, "enemy"),
+                ability(
+                    "FISSURE",
+                    "earthshaker",
+                    (0.439, 0.329),
+                    (0.382, 0.389),
+                    "projectile",
+                    start=0.06,
+                    end=0.34,
+                ),
+                ability(
+                    "EARTH SPIKE",
+                    "lion",
+                    (0.457, 0.407),
+                    (0.355, 0.431),
+                    "projectile",
+                    start=0.31,
+                    end=0.58,
+                ),
+                ability(
+                    "BLINK",
+                    "ursa",
+                    (0.323, 0.405),
+                    (0.365, 0.399),
+                    "blink",
+                    "ally",
+                    start=0.52,
+                    end=0.82,
+                ),
             ],
         ),
         (
@@ -132,9 +169,25 @@ def default_story() -> dict:
                 hero("lion", (0.405, 0.417), "enemy", end=(0.424, 0.435)),
                 ward,
                 ability(
-                    "FISSURE", "earthshaker", (0.398, 0.337), (0.372, 0.405), "aoe", radius=0.052
+                    "FISSURE",
+                    "earthshaker",
+                    (0.398, 0.337),
+                    (0.372, 0.405),
+                    "aoe",
+                    radius=0.052,
+                    start=0.06,
+                    end=0.30,
                 ),
-                ability("HEX", "lion", (0.405, 0.417), (0.323, 0.405), "control", radius=0.032),
+                ability(
+                    "HEX",
+                    "lion",
+                    (0.405, 0.417),
+                    (0.323, 0.405),
+                    "control",
+                    radius=0.032,
+                    start=0.29,
+                    end=0.57,
+                ),
                 ability(
                     "OVERPOWER",
                     "ursa",
@@ -144,6 +197,8 @@ def default_story() -> dict:
                     "ally",
                     radius=0.042,
                     value="+6 ударов",
+                    start=0.55,
+                    end=0.9,
                 ),
                 {
                     "type": "arrow",
@@ -240,6 +295,10 @@ def validate_story(story: dict) -> dict:
                 for v in numbers
             ):
                 raise ValueError("Координаты должны быть от 0 до 1")
+            start = float(obj.get("start", 0))
+            end = float(obj.get("end", 1))
+            if not all(math.isfinite(v) and 0 <= v <= 1 for v in (start, end)) or start > end:
+                raise ValueError("Неверный тайминг объекта")
             if len(str(obj.get("text", ""))) > 100:
                 raise ValueError("Подпись слишком длинная")
     return story
@@ -258,6 +317,15 @@ def interpolate(points, t):
             return [a[i] + (b[i] - a[i]) * remaining / distance for i in (0, 1)]
         remaining -= distance
     return points[-1]
+
+
+def event_progress(obj, t):
+    """Map scene time to an object's own beat window; None means not on screen yet."""
+    start = float(obj.get("start", 0))
+    end = float(obj.get("end", 1))
+    if t < start or t > end:
+        return None
+    return min(1.0, max(0.0, (t - start) / max(0.001, end - start)))
 
 
 @lru_cache(maxsize=32)
@@ -325,9 +393,19 @@ class MapPainter:
         ld = ImageDraw.Draw(layer)
         ordered = sorted(
             scene["objects"],
-            key=lambda o: {"arrow": 0, "draw": 0, "ability": 1, "text": 3}.get(o["type"], 2),
+            key=lambda o: {
+                "arrow": 0,
+                "draw": 0,
+                "zone": 1,
+                "fog": 1,
+                "hero": 2,
+                "ability": 3,
+                "text": 4,
+            }.get(o["type"], 2),
         )
         for obj in ordered:
+            if event_progress(obj, t) is None:
+                continue
             if obj["type"] in {"fog", "zone"}:
                 x, y = pos(obj["x"], obj["y"])
                 r = obj.get("radius", 0.06) / cw * mw
@@ -346,12 +424,15 @@ class MapPainter:
         ld = ImageDraw.Draw(crop)
         for obj in ordered:
             kind = obj["type"]
+            local_t = event_progress(obj, t)
+            if local_t is None:
+                continue
             color = COLORS.get(obj.get("color", obj.get("team", "ally")), COLORS["ally"])
             if kind in {"draw", "arrow"}:
                 points = obj.get("points", [])
                 if len(points) < 2:
                     continue
-                progress = min(1.0, t * 1.9 + 0.04) if obj.get("reveal") else 1
+                progress = min(1.0, local_t * 1.9 + 0.04) if obj.get("reveal") else 1
                 full = [pos(*p) for p in points]
                 distance = sum(math.dist(a, b) for a, b in pairwise(full)) * progress
                 visible = [full[0]]
@@ -398,7 +479,7 @@ class MapPainter:
                 )
                 crop.alpha_composite(self.ward, (x - 31, y - 23))
             elif kind == "ability":
-                self._draw_ability(crop, ld, obj, pos, t, mw, mh, cw)
+                self._draw_ability(crop, ld, obj, pos, local_t, mw, mh, cw)
             elif kind == "text":
                 x, y = pos(obj["x"], obj["y"])
                 label = obj.get("text", "")[:60]
@@ -461,6 +542,8 @@ class MapPainter:
 
     def _draw_ability(self, image, draw, obj, pos, t, width, height, camera_width):
         """Draw a readable, game-inspired spell beat without requiring gameplay footage."""
+        layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer, "RGBA")
         effect = obj.get("effect", "aoe")
         rgb = tuple(bytes.fromhex(ABILITY_COLORS.get(effect, ABILITY_COLORS["aoe"])[1:]))
         origin = pos(float(obj.get("x", 0)), float(obj.get("y", 0)))
@@ -578,7 +661,7 @@ class MapPainter:
             icon = ImageOps.fit(caster, (icon_size, icon_size))
             mask = Image.new("L", (icon_size, icon_size))
             ImageDraw.Draw(mask).ellipse((0, 0, icon_size - 1, icon_size - 1), fill=255)
-            image.paste(
+            layer.paste(
                 icon, (round(origin[0] - icon_size / 2), round(origin[1] - icon_size / 2)), mask
             )
             draw.ellipse(
@@ -607,6 +690,7 @@ class MapPainter:
             width=2,
         )
         draw.text((lx - tw / 2, ly), label, font=f, fill=(*rgb, 255))
+        image.alpha_composite(layer)
 
 
 def render_story(config: AppConfig, story: dict, output: Path, progress=lambda _: None) -> Path:

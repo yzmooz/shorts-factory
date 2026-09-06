@@ -166,6 +166,8 @@ function properties() {
     $("ability-name").value = o.ability || "ABILITY";
     $("ability-effect").value = o.effect || "aoe";
     $("ability-value").value = o.value || "";
+    $("ability-start").value = Number(o.start ?? 0).toFixed(2);
+    $("ability-end").value = Number(o.end ?? 1).toFixed(2);
   }
   $("object-hidden").parentElement.hidden = o.type !== "hero";
   $("object-hidden").checked = !!o.hidden;
@@ -205,6 +207,12 @@ function lerp(points, t) {
     remaining -= ds[i];
   }
   return points.at(-1);
+}
+function eventProgress(o) {
+  const start = Number(o.start ?? 0),
+    end = Number(o.end ?? 1);
+  if (time < start || time > end) return null;
+  return Math.min(1, Math.max(0, (time - start) / Math.max(0.001, end - start)));
 }
 function round(g, x, y, w, h, r, fill, stroke) {
   g.beginPath();
@@ -274,8 +282,12 @@ function linePoints(points, t) {
 }
 function paintMap(g) {
   const ordered = [...scene().objects].sort((a, b) =>
-    ({ arrow: 0, draw: 0, ability: 1, hero: 2, text: 3 }[a.type] ?? 2) -
-    ({ arrow: 0, draw: 0, ability: 1, hero: 2, text: 3 }[b.type] ?? 2),
+    ({ arrow: 0, draw: 0, zone: 1, fog: 1, hero: 2, ability: 3, text: 4 }[
+      a.type
+    ] ?? 2) -
+    ({ arrow: 0, draw: 0, zone: 1, fog: 1, hero: 2, ability: 3, text: 4 }[
+      b.type
+    ] ?? 2),
   );
   const b = box();
   g.clearRect(0, 0, 1008, 980);
@@ -295,6 +307,7 @@ function paintMap(g) {
   g.fillStyle = "#06101b18";
   g.fillRect(0, 0, 1008, 980);
   for (const o of ordered) {
+    if (eventProgress(o) === null) continue;
     if (!["zone", "fog"].includes(o.type)) continue;
     const [x, y] = point([o.x, o.y], b),
       r = ((o.radius || 0.06) / b.w) * 1008,
@@ -319,11 +332,13 @@ function paintMap(g) {
     }
   }
   for (const o of ordered) {
+    const localTime = eventProgress(o);
+    if (localTime === null) continue;
     const col = C[o.color || o.team || "ally"];
     if (["arrow", "draw"].includes(o.type) && o.points?.length > 1) {
       const pts = linePoints(
         o.points.map((p) => point(p, b)),
-        o.reveal ? Math.min(1, time * 1.9 + 0.04) : 1,
+        o.reveal ? Math.min(1, localTime * 1.9 + 0.04) : 1,
       );
       g.lineCap = "round";
       g.lineJoin = "round";
@@ -404,7 +419,7 @@ function paintMap(g) {
         ac = abilityColors[effect] || abilityColors.aoe,
         origin = point([o.x, o.y], b),
         target = point(o.target || [o.x, o.y], b),
-        progress = o.reveal === false ? 1 : Math.min(1, time * 1.55 + 0.04),
+        progress = o.reveal === false ? 1 : Math.min(1, localTime * 1.55 + 0.04),
         current = [
           origin[0] + (target[0] - origin[0]) * progress,
           origin[1] + (target[1] - origin[1]) * progress,
@@ -826,6 +841,17 @@ for (const field of ["ability-name", "ability-value"]) {
     if (obj()?.type === "ability") {
       if (field === "ability-name") obj().ability = $(field).value;
       else obj().value = $(field).value;
+      changed();
+    }
+  };
+}
+for (const field of ["ability-start", "ability-end"]) {
+  $(field).onfocus = () => checkpoint();
+  $(field).oninput = () => {
+    if (obj()?.type === "ability") {
+      const value = Math.min(1, Math.max(0, Number($(field).value) || 0));
+      obj()[field === "ability-start" ? "start" : "end"] = value;
+      if (obj().start > obj().end) obj().end = obj().start;
       changed();
     }
   };
