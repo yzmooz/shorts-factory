@@ -1,0 +1,20 @@
+[Unit]
+Description=Generate and publish one YouTube Short
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=shorts-factory
+Group=shorts-factory
+WorkingDirectory=/opt/shorts-factory
+ExecStart=/usr/bin/flock -n /opt/shorts-factory/data/automation.lock /opt/shorts-factory/.venv/bin/shorts-factory --config /opt/shorts-factory/config.toml auto-run
+Environment=PYTHONUNBUFFERED=1
+TimeoutStartSec=2h
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/shorts-factory
+

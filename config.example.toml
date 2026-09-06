@@ -1,0 +1,62 @@
+[channel]
+# "general" = семейный контент для общей аудитории 13+; "kids" = направлен детям.
+audience = "general"
+language = "ru"
+niche = "Удивительные факты о науке и мире для зрителей 13+"
+voice = "ru-RU-DmitryNeural"
+voice_rate = "+8%"
+video_seconds = 24
+scenes = 6
+
+[content]
+# "deepseek" или "openai". Ключ берется только из .env/переменных среды.
+provider = "deepseek"
+deepseek_model = "deepseek-v4-flash"
+openai_model = "gpt-5.6-luna"
+reasoning_effort = "low"
+api_timeout_seconds = 180
+topic_batch_size = 50
+style = "разговорно, конкретно и живо; как увлечённый автор, без канцелярита и кликбейта"
+call_to_action = "простой вопрос по теме с числом или 2–3 вариантами ответа"
+
+[visuals]
+# "pexels" для автоматических фото или "gradient" для автономного фона.
+provider = "pexels"
+orientation = "portrait"
+results_per_query = 12
+credit_in_description = false
+# Сначала искать живые вертикальные клипы; если подходящего нет — брать фото.
+prefer_videos = true
+max_video_mb = 28
+
+[render]
+width = 1080
+height = 1920
+fps = 30
+font_path = ""
+background_music = ""
+music_volume = 0.08
+# Обязательный ролик, который добавляется со звуком ровно в середину каждого шортса.
+midroll_path = "assets/midroll.mp4"
+# Постоянный фирменный баннер поверх всего ролика, включая вставку.
+brand_banner_path = "assets/ready-helper-banner.png"
+brand_width = 460
+brand_bottom_margin = 190
+brand_opacity = 0.92
+
+[youtube]
+client_secrets = "client_secret.json"
+token_file = "youtube_token.json"
+category_id = "27"
+# Первая безопасная настройка. После проверки можно выбрать "unlisted" или "public".
+privacy = "private"
+auto_upload = false
+contains_synthetic_media = false
+
+[automation]
+max_uploads_per_day = 4
+# Рендер занимает несколько минут, поэтому оставляем запас к шестичасовым слотам.
+min_hours_between_uploads = 5.5
+# On a VPS, remove MP4, frames, stock images, and narration only after upload succeeds.
+# plan.json/probe.json and the queue record are retained.
+cleanup_after_upload = true

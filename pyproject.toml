@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shorts-factory"
+version = "0.1.0"
+description = "Policy-aware YouTube Shorts generation and upload pipeline"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "edge-tts>=7.0,<8",
+  "google-api-python-client>=2.160,<3",
+  "google-auth-oauthlib>=1.2,<2",
+  "openai>=2.0,<3",
+  "Pillow>=11,<13",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+
+[project.scripts]
+shorts-factory = "shorts_factory.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

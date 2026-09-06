@@ -1,0 +1,15 @@
+[Unit]
+Description=Publish up to four YouTube Shorts per day
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Moscow
+OnCalendar=*-*-* 09:00:00 Europe/Moscow
+OnCalendar=*-*-* 15:00:00 Europe/Moscow
+OnCalendar=*-*-* 21:00:00 Europe/Moscow
+Persistent=true
+AccuracySec=1s
+Unit=shorts-factory.service
+
+[Install]
+WantedBy=timers.target
+
