@@ -152,6 +152,11 @@
             <label
               >Значение / таймер<input id="ability-value" maxlength="18" placeholder="-320 HP"
             /></label>
+            <div class="field inline ability-timing">
+              <label>Появление<input id="ability-start" type="number" min="0" max="1" step="0.05" /></label>
+              <label>Исчезновение<input id="ability-end" type="number" min="0" max="1" step="0.05" /></label>
+            </div>
+            <p class="muted">Время указано долей сцены: 0 — начало, 1 — конец.</p>
             <p class="muted">Портрет выбранного героя используется как кастер способности.</p>
           </div
           ><label
