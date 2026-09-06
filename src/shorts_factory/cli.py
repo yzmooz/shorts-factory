@@ -193,9 +193,12 @@ def _doctor(config) -> dict[str, dict[str, object]]:
             "value": f"{provider} ({key_name})",
         },
         "visuals_api": {
-            "ok": visual_provider == "gradient" or bool(os.getenv("PEXELS_API_KEY", "").strip()),
+            "ok": visual_provider in {"gradient", "dota"}
+            or bool(os.getenv("PEXELS_API_KEY", "").strip()),
             "value": (
-                "gradient (API key not needed)"
+                "official Dota 2 media (API key not needed)"
+                if visual_provider == "dota"
+                else "gradient (API key not needed)"
                 if visual_provider == "gradient"
                 else "pexels (PEXELS_API_KEY)"
             ),
@@ -264,7 +267,7 @@ def _cleanup_uploaded_output(config, output_dir: Path) -> None:
 
 def _stored_backgrounds(output_dir: Path, scene_count: int) -> list[Path | None]:
     assets = output_dir / "assets"
-    extensions = (".mp4", ".jpg", ".jpeg", ".png")
+    extensions = (".mp4", ".webm", ".mov", ".jpg", ".jpeg", ".png")
     result: list[Path | None] = []
     for index in range(1, scene_count + 1):
         candidates = [assets / f"scene-{index:02d}{extension}" for extension in extensions]

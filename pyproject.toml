@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "shorts-factory"
 version = "0.1.0"
-description = "Policy-aware YouTube Shorts generation and upload pipeline"
+description = "Automated Russian Dota 2 YouTube Shorts generation and upload pipeline"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [

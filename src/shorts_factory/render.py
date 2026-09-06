@@ -12,6 +12,8 @@ from pathlib import Path
 
 from .config import AppConfig
 
+VIDEO_SUFFIXES = {".mp4", ".webm", ".mov"}
+
 
 @dataclass(frozen=True, slots=True)
 class MediaInfo:
@@ -104,7 +106,7 @@ def render_video(config: AppConfig, frames: list[Path], audio_path: Path, output
 
     if overlays:
         for source, overlay in zip(sources, overlays, strict=True):
-            if source.suffix.lower() == ".mp4":
+            if source.suffix.lower() in VIDEO_SUFFIXES:
                 command.extend(
                     ["-stream_loop", "-1", "-t", f"{scene_duration:.6f}", "-i", str(source)]
                 )
@@ -257,7 +259,7 @@ def _motion_filter(
     scene_duration: float,
 ) -> str:
     """Create varied, subtle Ken Burns movement without distracting from captions."""
-    if source.suffix.lower() == ".mp4":
+    if source.suffix.lower() in VIDEO_SUFFIXES:
         return f"fps={fps},"
     total_frames = max(1, round(scene_duration * fps))
     variants = (

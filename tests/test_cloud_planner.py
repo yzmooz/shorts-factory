@@ -23,7 +23,7 @@ def config(tmp_path, provider="deepseek"):
 
 
 def plan_json():
-    return json.dumps(demo_plan("Марс").to_dict(), ensure_ascii=False)
+    return json.dumps(demo_plan("Pudge").to_dict(), ensure_ascii=False)
 
 
 class FakeOpenAI:
@@ -47,7 +47,7 @@ def test_openai_uses_responses_and_json_schema(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     monkeypatch.setattr("shorts_factory.planner.OpenAI", FakeOpenAI)
     result = _generate_openai(config(tmp_path, "openai"), "prompt")
-    assert result["topic"] == "Марс"
+    assert result["topic"] == "Pudge"
     assert FakeOpenAI.last_kwargs["text"]["format"]["type"] == "json_schema"
 
 
@@ -55,7 +55,7 @@ def test_deepseek_uses_json_mode_without_thinking(tmp_path, monkeypatch):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
     monkeypatch.setattr("shorts_factory.planner.OpenAI", FakeOpenAI)
     result = _generate_deepseek(config(tmp_path), "prompt")
-    assert result["topic"] == "Марс"
+    assert result["topic"] == "Pudge"
     assert FakeOpenAI.last_kwargs["response_format"] == {"type": "json_object"}
     assert FakeOpenAI.last_kwargs["extra_body"]["thinking"]["type"] == "disabled"
 

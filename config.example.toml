@@ -2,7 +2,7 @@
 # "general" = семейный контент для общей аудитории 13+; "kids" = направлен детям.
 audience = "general"
 language = "ru"
-niche = "Удивительные факты о науке и мире для зрителей 13+"
+niche = "Dota 2: фишки героев, ошибки, предметы, макро, лор, новости и патчи"
 voice = "ru-RU-DmitryNeural"
 voice_rate = "+8%"
 video_seconds = 24
@@ -16,12 +16,16 @@ openai_model = "gpt-5.6-luna"
 reasoning_effort = "low"
 api_timeout_seconds = 180
 topic_batch_size = 50
-style = "разговорно, конкретно и живо; как увлечённый автор, без канцелярита и кликбейта"
-call_to_action = "простой вопрос по теме с числом или 2–3 вариантами ответа"
+# Второй проход DeepSeek/OpenAI проверяет факты и усиливает удержание.
+editorial_review = true
+fresh_topic_every = 4
+style = "быстро, уверенно и по-дотерски; конкретная польза, лёгкий сленг, без токсичности и ложного кликбейта"
+call_to_action = "короткая игровая ситуация с выбором героя, предмета или решения"
 
 [visuals]
-# "pexels" для автоматических фото или "gradient" для автономного фона.
-provider = "pexels"
+# "dota" загружает официальные анимированные рендеры героев и изображения предметов.
+# "pexels" и "gradient" оставлены как технические запасные варианты.
+provider = "dota"
 orientation = "portrait"
 results_per_query = 12
 credit_in_description = false
@@ -47,7 +51,7 @@ brand_opacity = 0.92
 [youtube]
 client_secrets = "client_secret.json"
 token_file = "youtube_token.json"
-category_id = "27"
+category_id = "20"
 # Первая безопасная настройка. После проверки можно выбрать "unlisted" или "public".
 privacy = "private"
 auto_upload = false

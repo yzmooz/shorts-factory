@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import AppConfig
-from .planner import demo_plan, generate_plan, generate_topic_batch
+from .planner import demo_plan, generate_plan, generate_topic_batch, generate_trending_topic
 from .queue import QueueStore
 from .render import probe_video, render_video
 from .stock import fetch_scene_images
@@ -43,9 +43,20 @@ def build_short(config: AppConfig, topic: str, *, demo: bool = False) -> tuple[i
 def next_topic(config: AppConfig) -> str:
     topics_path = config.root / "topics.txt"
     queue = QueueStore(config.root / "data" / "queue.db")
-    for raw in topics_path.read_text(encoding="utf-8-sig").splitlines():
-        topic = raw.strip()
-        if topic and not topic.startswith("#") and not queue.exists(topic):
+    topic_lines = (
+        topics_path.read_text(encoding="utf-8-sig").splitlines() if topics_path.exists() else []
+    )
+    evergreen = [raw.strip() for raw in topic_lines if raw.strip() and not raw.startswith("#")]
+    rows = queue.rows()
+    fresh_every = int(config.section("content").get("fresh_topic_every", 4))
+    if fresh_every > 0 and (len(rows) + 1) % fresh_every == 0:
+        excluded = [str(row["topic"]) for row in rows] + evergreen
+        try:
+            return generate_trending_topic(config, excluded)
+        except RuntimeError as exc:
+            print(f"Свежий Dota-feed недоступен, беру вечнозелёную тему: {exc}")
+    for topic in evergreen:
+        if not queue.exists(topic):
             return topic
     generated = refill_topics(config)
     return generated[0]

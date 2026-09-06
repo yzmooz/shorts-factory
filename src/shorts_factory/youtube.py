@@ -95,9 +95,7 @@ def build_description(config: AppConfig, plan: VideoPlan, output_dir: Path) -> s
 
 def _hashtags(tags: list[str], limit: int = 5) -> list[str]:
     normalized = [_hashtag(tag) for tag in tags]
-    candidates = ["shorts"]
-    if "наука" in normalized:
-        candidates.append("наука")
+    candidates = ["shorts", "dota2", "дота2"]
     candidates.extend(normalized)
     result: list[str] = []
     seen: set[str] = set()

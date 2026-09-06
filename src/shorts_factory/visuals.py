@@ -19,6 +19,7 @@ PALETTES = [
     ("#052E16", "#15803D", "#86EFAC", "#F0FDF4"),
 ]
 ACCENT = "#FFD166"
+VIDEO_SUFFIXES = {".mp4", ".webm", ".mov"}
 
 
 def create_frames(
@@ -30,6 +31,7 @@ def create_frames(
 ) -> list[Path]:
     render = config.section("render")
     width, height = int(render["width"]), int(render["height"])
+    visual_provider = str(config.raw.get("visuals", {}).get("provider", "gradient"))
     seed = int(hashlib.sha256(plan.topic.encode("utf-8")).hexdigest()[:8], 16)
     randomizer = random.Random(seed)
     frame_dir = output_dir / "frames"
@@ -46,13 +48,23 @@ def create_frames(
         background = backgrounds[index] if backgrounds and index < len(backgrounds) else None
         if background is None:
             image = _gradient(width, height, palette[0], palette[1])
+        elif background.suffix.lower() == ".png" and visual_provider == "dota":
+            image = _dota_item_background(background, width, height)
         else:
             image = _photo_background(background, width, height)
         background_path = background_dir / f"scene-{index + 1:02d}.jpg"
         image.save(background_path, quality=94)
-        render_source = background if background and background.suffix.lower() == ".mp4" else background_path
+        render_source = (
+            background
+            if background and background.suffix.lower() in VIDEO_SUFFIXES
+            else background_path
+        )
 
-        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        overlay = (
+            _dota_atmosphere(width, height, index)
+            if visual_provider == "dota"
+            else Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        )
         draw = ImageDraw.Draw(overlay, "RGBA")
         if background is None:
             _decorations(draw, width, height, palette[2], randomizer)
@@ -76,7 +88,7 @@ def create_frames(
 
 
 def _photo_background(path: Path, width: int, height: int) -> Image.Image:
-    if path.suffix.lower() == ".mp4":
+    if path.suffix.lower() in VIDEO_SUFFIXES:
         source = _video_poster(path)
     else:
         source = Image.open(path)
@@ -107,6 +119,34 @@ def _photo_background(path: Path, width: int, height: int) -> Image.Image:
         shade_draw.point((0, y), fill=(0, 0, 0, alpha))
     shade = shade.resize((width, height))
     return Image.alpha_composite(tinted, shade).convert("RGB")
+
+
+def _dota_item_background(path: Path, width: int, height: int) -> Image.Image:
+    """Turn a small official item icon into a deliberate Dota-style poster."""
+    base = _gradient(width, height, "#07110D", "#2A0B08").convert("RGBA")
+    with Image.open(path) as source:
+        icon = ImageOps.exif_transpose(source).convert("RGBA")
+    scale = min(int(width * 0.58) / icon.width, int(height * 0.30) / icon.height)
+    icon = icon.resize(
+        (max(1, round(icon.width * scale)), max(1, round(icon.height * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    x = (width - icon.width) // 2
+    y = int(height * 0.22)
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow, "RGBA")
+    padding = max(icon.width, icon.height) // 2
+    glow_draw.ellipse(
+        (x - padding, y - padding, x + icon.width + padding, y + icon.height + padding),
+        fill=(240, 90, 35, 125),
+    )
+    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(95)))
+    shadow = Image.new("RGBA", icon.size, (0, 0, 0, 180)).filter(
+        ImageFilter.GaussianBlur(18)
+    )
+    base.alpha_composite(shadow, (x + 12, y + 18))
+    base.alpha_composite(icon, (x, y))
+    return base.convert("RGB")
 
 
 def _video_poster(path: Path) -> Image.Image:
@@ -170,13 +210,13 @@ def _draw_title_card(
         card,
         radius=radius,
         fill=(3, 10, 22, 138),
-        outline=(103, 232, 249, 62),
+        outline=(240, 112, 54, 86),
         width=2,
     )
     y = card_top + vertical_padding // 2
     for line_index, line in enumerate(lines):
         fill = (
-            (103, 232, 249, 255)
+            (255, 184, 90, 255)
             if len(lines) > 1 and line_index == len(lines) - 1 and not is_hook
             else (
                 255,
@@ -210,6 +250,38 @@ def _gradient(width: int, height: int, top_hex: str, bottom_hex: str) -> Image.I
         color = tuple(round(top[i] * (1 - ratio) + bottom[i] * ratio) for i in range(3))
         draw.line((0, y, width, y), fill=color)
     return image
+
+
+def _dota_atmosphere(width: int, height: int, index: int) -> Image.Image:
+    """Add a restrained Radiant/Dire atmosphere over official hero renders."""
+    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(glow, "RGBA")
+    if index % 2:
+        left, right = (65, 174, 104, 70), (213, 66, 48, 88)
+    else:
+        left, right = (213, 66, 48, 78), (65, 174, 104, 76)
+    draw.ellipse((-width // 2, -height // 6, width // 2, height // 2), fill=left)
+    draw.ellipse(
+        (width // 2, height // 6, width + width // 2, int(height * 0.82)), fill=right
+    )
+    glow = glow.filter(ImageFilter.GaussianBlur(max(70, width // 7)))
+
+    lines = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    line_draw = ImageDraw.Draw(lines, "RGBA")
+    line_draw.line(
+        (0, int(height * 0.12), int(width * 0.32), 0), fill=(236, 122, 62, 46), width=4
+    )
+    line_draw.line(
+        (width, int(height * 0.18), int(width * 0.72), 0),
+        fill=(87, 190, 125, 42),
+        width=4,
+    )
+    line_draw.line(
+        (0, int(height * 0.88), int(width * 0.28), height),
+        fill=(87, 190, 125, 32),
+        width=3,
+    )
+    return Image.alpha_composite(glow, lines)
 
 
 def _decorations(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -11,6 +12,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from .config import AppConfig
+from .dota import resolve_visual_asset
 from .models import VideoPlan
 
 PEXELS_SEARCH_URL = "https://api.pexels.com/v1/search"
@@ -21,6 +23,8 @@ def fetch_scene_images(config: AppConfig, plan: VideoPlan, output_dir: Path) -> 
     visuals = config.section("visuals")
     if visuals["provider"] == "gradient":
         return [None] * len(plan.scenes)
+    if visuals["provider"] == "dota":
+        return _fetch_dota_assets(config, plan, output_dir)
     load_dotenv(config.root / ".env")
     api_key = os.getenv("PEXELS_API_KEY", "").strip()
     if not api_key:
@@ -80,6 +84,60 @@ def fetch_scene_images(config: AppConfig, plan: VideoPlan, output_dir: Path) -> 
         )
     (output_dir / "credits.json").write_text(
         json.dumps({"provider": "Pexels", "items": credits}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return paths
+
+
+def _fetch_dota_assets(
+    config: AppConfig, plan: VideoPlan, output_dir: Path
+) -> list[Path | None]:
+    """Download official animated hero renders or item art for every Dota scene."""
+    visuals = config.section("visuals")
+    asset_dir = output_dir / "assets"
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    credits: list[dict[str, Any]] = []
+    paths: list[Path | None] = []
+    downloaded_by_url: dict[str, Path] = {}
+    max_bytes = int(float(visuals.get("max_video_mb", 28)) * 1024 * 1024)
+    for index, scene in enumerate(plan.scenes, start=1):
+        asset = resolve_visual_asset(scene.visual_hint, plan.topic, index)
+        suffix = ".webm" if asset["kind"] == "hero" else ".png"
+        target = asset_dir / f"scene-{index:02d}{suffix}"
+        if asset["url"] in downloaded_by_url:
+            shutil.copyfile(downloaded_by_url[asset["url"]], target)
+            downloaded = True
+        else:
+            try:
+                downloaded = _download(asset["url"], target, max_bytes=max_bytes)
+            except RuntimeError:
+                downloaded = False
+        if not downloaded and asset["kind"] != "hero":
+            fallback = resolve_visual_asset("hero:pudge", plan.topic, index)
+            target = asset_dir / f"scene-{index:02d}.webm"
+            asset = fallback
+            try:
+                downloaded = _download(asset["url"], target, max_bytes=max_bytes)
+            except RuntimeError:
+                downloaded = False
+        paths.append(target if downloaded else None)
+        if downloaded:
+            downloaded_by_url.setdefault(asset["url"], target)
+            credits.append(
+                {
+                    "scene": index,
+                    "kind": asset["kind"],
+                    "name": asset["name"],
+                    "url": asset["url"],
+                    "local_file": str(target),
+                }
+            )
+    (output_dir / "credits.json").write_text(
+        json.dumps(
+            {"provider": "Official Dota 2 media", "items": credits},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     return paths
@@ -190,7 +248,7 @@ def _download(url: str, target: Path, *, max_bytes: int = 32 * 1024 * 1024) -> b
             temporary.replace(target)
             return True
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise RuntimeError(f"Не удалось скачать изображение Pexels: {exc}") from exc
+        raise RuntimeError(f"Не удалось скачать визуальный материал: {exc}") from exc
     finally:
         temporary.unlink(missing_ok=True)
 

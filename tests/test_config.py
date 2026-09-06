@@ -18,6 +18,12 @@ def test_valid_config():
     _validate(valid_config())
 
 
+def test_dota_visual_provider_is_allowed():
+    config = valid_config()
+    config["visuals"]["provider"] = "dota"
+    _validate(config)
+
+
 def test_bad_audience_rejected():
     config = valid_config()
     config["channel"]["audience"] = "everyone"

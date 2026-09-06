@@ -8,14 +8,19 @@ def app_config(tmp_path):
     return AppConfig(
         root=tmp_path,
         raw={
-            "channel": {"audience": "general", "niche": "наука"},
-            "content": {"provider": "deepseek", "topic_batch_size": 3},
+            "channel": {"audience": "general", "niche": "Dota 2"},
+            "content": {
+                "provider": "deepseek",
+                "topic_batch_size": 3,
+                "fresh_topic_every": 4,
+            },
         },
     )
 
 
 def test_topic_batch_removes_duplicates(tmp_path, monkeypatch):
     config = app_config(tmp_path)
+    monkeypatch.setattr("shorts_factory.planner.discovery_context", lambda: "патч 7.xx")
     monkeypatch.setattr(
         "shorts_factory.planner._generate_deepseek_topics",
         lambda *_args: {"topics": ["  Почему лёд плавает? ", "почему лед плавает?", "Новая тема"]},
@@ -59,3 +64,17 @@ def test_next_topic_refills_when_queue_is_empty(tmp_path, monkeypatch):
     )
 
     assert next_topic(config) == "Тема от DeepSeek"
+
+
+def test_every_fourth_topic_uses_live_dota_feed(tmp_path, monkeypatch):
+    config = app_config(tmp_path)
+    (tmp_path / "topics.txt").write_text("Вечнозелёная тема\n", encoding="utf-8")
+    queue = QueueStore(tmp_path / "data" / "queue.db")
+    for index in range(3):
+        queue.add(f"Старая тема {index}", tmp_path / f"old-{index}")
+    monkeypatch.setattr(
+        "shorts_factory.pipeline.generate_trending_topic",
+        lambda _config, _excluded: "Свежий разбор патча Dota 2",
+    )
+
+    assert next_topic(config) == "Свежий разбор патча Dota 2"

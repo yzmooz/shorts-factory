@@ -57,10 +57,13 @@ def _validate(raw: dict[str, Any]) -> None:
     if provider not in {"deepseek", "openai"}:
         raise ValueError("content.provider должен быть 'deepseek' или 'openai'")
     visual_provider = raw["visuals"].get("provider")
-    if visual_provider not in {"gradient", "pexels"}:
-        raise ValueError("visuals.provider должен быть 'gradient' или 'pexels'")
+    if visual_provider not in {"gradient", "pexels", "dota"}:
+        raise ValueError("visuals.provider должен быть 'gradient', 'pexels' или 'dota'")
     privacy = raw["youtube"].get("privacy")
     if privacy not in {"private", "unlisted", "public"}:
         raise ValueError("youtube.privacy должен быть private, unlisted или public")
     if int(raw["automation"].get("max_uploads_per_day", 0)) not in range(1, 5):
         raise ValueError("max_uploads_per_day должен быть от 1 до 4")
+    fresh_every = int(raw["content"].get("fresh_topic_every", 4))
+    if fresh_every not in range(1, 21):
+        raise ValueError("content.fresh_topic_every должен быть от 1 до 20")
